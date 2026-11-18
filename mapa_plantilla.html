@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fibra Chile 27F</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  html, body, #mapa { height: 100%; margin: 0; }
+  body { font-family: system-ui, sans-serif; }
+  .panel { background: #fff; padding: 10px 12px; border-radius: 6px;
+           box-shadow: 0 1px 4px rgba(0,0,0,.3); font-size: 13px; line-height: 1.45; }
+  .panel h3 { margin: 0 0 6px; font-size: 14px; }
+  .barra { height: 10px; width: 160px; border-radius: 3px;
+           background: linear-gradient(90deg, #ffe08a, #f6ad55, #dd6b20, #c1121f); }
+  .fila { display: flex; justify-content: space-between; width: 160px; font-size: 11px; }
+</style>
+</head>
+<body>
+<div id="mapa"></div>
+<script>
+const D = __DATOS_MAPA__;
+
+const mapa = L.map('mapa').setView([-36, -71.5], 5);
+const esri = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/';
+L.tileLayer(esri + 'World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+  maxZoom: 16, attribution: 'Tiles &copy; Esri, DeLorme, NAVTEQ'
+}).addTo(mapa);
+L.tileLayer(esri + 'World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}', {
+  maxZoom: 16
+}).addTo(mapa);
+
+function color(p) {
+  if (p <= 0) return '#2b6cb0';
+  if (p < 0.25) return '#ffe08a';
+  if (p < 0.5) return '#f6ad55';
+  if (p < 0.75) return '#dd6b20';
+  return '#c1121f';
+}
+
+const operacion = L.geoJSON(D.enlaces, {
+  style: { color: '#2b6cb0', weight: 2, opacity: 0.8 },
+  onEachFeature: (f, l) => l.bindPopup(`Enlace ${f.properties.gid}<br>Largo: ${f.properties.largo_km} km`)
+});
+
+const dano = L.geoJSON(D.enlaces, {
+  style: f => ({ color: color(f.properties.prob), weight: f.properties.prob > 0 ? 3 : 1.5,
+                 opacity: f.properties.prob > 0 ? 0.95 : 0.5 }),
+  onEachFeature: (f, l) => l.bindPopup(
+    `Enlace ${f.properties.gid}<br>Distancia al epicentro: ${f.properties.dist_km} km` +
+    `<br>Probabilidad de falla: <b>${(f.properties.prob * 100).toFixed(1)}%</b>`)
+}).addTo(mapa);
+
+const s = D.sismo;
+const sismo = L.layerGroup([
+  L.circle([s.lat, s.lon], { radius: s.radio_km * 1000, color: '#c1121f', weight: 1,
+                             fillOpacity: 0.06, dashArray: '4 4' }),
+  L.circleMarker([s.lat, s.lon], { radius: 9, color: '#fff', weight: 2,
+                                   fillColor: '#c1121f', fillOpacity: 1 })
+    .bindPopup(`<b>M ${s.mag} - ${s.lugar}</b><br>${s.fecha}<br>Profundidad: ${s.prof} km` +
+               `<br>Radio del modelo: ${s.radio_km} km`)
+]).addTo(mapa);
+
+const nodos = L.layerGroup(D.nodos.map(n => L.circleMarker([n.lat, n.lon], {
+  radius: 6, color: '#111', weight: 1.5, fillColor: '#ffffff', fillOpacity: 1
+}).bindPopup(`<b>${n.nombre}</b><br>Rol: ${n.rol.replaceAll(';', ', ')}<br>${n.desc}` +
+             `<br>Distancia a la red: ${n.dist} km`))).addTo(mapa);
+
+L.control.layers(null, {
+  'Enlaces en operación': operacion,
+  'Daño del terremoto (prob. de falla)': dano,
+  'Sismo 8.8 y radio del modelo': sismo,
+  'Nodos clave': nodos
+}, { collapsed: false }).addTo(mapa);
+
+const info = L.control({ position: 'bottomleft' });
+info.onAdd = () => {
+  const div = L.DomUtil.create('div', 'panel');
+  div.innerHTML =
+    `<h3>ATTR entre ${D.nodos.length} nodos clave</h3>` +
+    `Antes del sismo: <b>${D.attr.antes.toFixed(4)}</b> (${D.attr.conectados}/${D.attr.pares} pares)<br>` +
+    `Después del 8.8: <b>${D.attr.despues.toFixed(4)}</b> (valor esperado)<br><br>` +
+    `Probabilidad de falla del enlace<div class="barra"></div>` +
+    `<div class="fila"><span>0%</span><span>50%</span><span>100%</span></div>` +
+    `<span style="color:#2b6cb0">&#9644;</span> fuera del radio (0%)`;
+  return div;
+};
+info.addTo(mapa);
+</script>
+</body>
+</html>

@@ -1,0 +1,39 @@
+# Levanta PostgreSQL con PostGIS 3.5 y pgRouting 3.8 (trae pgr_createTopology)
+# y ejecuta main.py contra esa base de datos.
+#
+#   docker compose up --build
+#
+# Al terminar quedan main.sql y mapa.html en esta misma carpeta.
+services:
+  db:
+    image: pgrouting/pgrouting:17-3.5-3.8
+    environment:
+      POSTGRES_PASSWORD: postgres   # clave de prueba, solo para este contenedor local
+      POSTGRES_DB: tarea2
+    ports:
+      - "5433:5432"                 # para conectar QGIS o psql desde el computador
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d tarea2"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGPORT: "5432"
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: tarea2
+    volumes:
+      - .:/app
+    command: python main.py --sin-navegador
+
+volumes:
+  pgdata:

@@ -1,0 +1,20 @@
+nombre,rol,descripcion,lon,lat
+Arica,genera;recibe,Aterrizaje de cable submarino internacional y capital regional,-70.3196,-18.4783
+Iquique,recibe,Capital regional,-70.1528,-20.2142
+Antofagasta,recibe,Capital regional,-70.3976,-23.6463
+Copiapó,recibe,Capital regional,-70.3314,-27.3668
+La Serena,recibe,Capital regional,-71.2489,-29.9027
+Los Andes,genera,Cruce terrestre de fibra hacia Argentina,-70.5980,-32.8337
+Valparaíso,genera;recibe,Aterrizaje de cables submarinos internacionales y capital regional,-71.6273,-33.0389
+Quilicura,genera,Data center de Google (Quilicura),-70.7390,-33.3570
+Santiago,intercambia;recibe,PIT Santiago / NAP Chile y capital nacional,-70.6506,-33.4378
+Rancagua,recibe,Capital regional,-70.7398,-34.1701
+Curicó,intercambia,PIT Curicó,-71.2394,-34.9828
+Talca,recibe,Capital regional,-71.6554,-35.4264
+Chillán,recibe,Capital regional,-72.1034,-36.6066
+Concepción,intercambia;recibe,PIT Concepción y capital regional,-73.0503,-36.8270
+Temuco,recibe,Capital regional,-72.5904,-38.7359
+Valdivia,recibe,Capital regional,-73.2452,-39.8142
+Puerto Montt,recibe,Capital regional,-72.9411,-41.4717
+Coyhaique,recibe,Capital regional,-72.0662,-45.5712
+Punta Arenas,recibe,Capital regional,-70.9171,-53.1626

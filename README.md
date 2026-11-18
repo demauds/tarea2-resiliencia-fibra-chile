@@ -1,6 +1,6 @@
 # Resiliencia de la Internet chilena ante el terremoto 8.8
 
-Tarea 2 de Algoritmos de Ruteo y Redes Resilientes (CIT3435), Universidad Diego Portales.
+Tarea 2 de Algoritmos de Ruteo y Redes Resilientes.
 
 ## Datos utilizados
 

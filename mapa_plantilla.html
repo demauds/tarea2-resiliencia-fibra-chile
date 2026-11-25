@@ -80,7 +80,9 @@ info.onAdd = () => {
   div.innerHTML =
     `<h3>ATTR entre ${D.nodos.length} nodos clave</h3>` +
     `Antes del sismo: <b>${D.attr.antes.toFixed(4)}</b> (${D.attr.conectados}/${D.attr.pares} pares)<br>` +
-    `Después del 8.8: <b>${D.attr.despues.toFixed(4)}</b> (valor esperado)<br><br>` +
+    `Después del 8.8: <b>${D.attr.despues.toFixed(4)}</b> (valor esperado)<br>` +
+    `Diferencia: ${(D.attr.despues - D.attr.antes).toFixed(4)} ` +
+    `(${((D.attr.despues - D.attr.antes) / D.attr.antes * 100).toFixed(1)} %)<br><br>` +
     `Probabilidad de falla del enlace<div class="barra"></div>` +
     `<div class="fila"><span>0%</span><span>50%</span><span>100%</span></div>` +
     `<span style="color:#2b6cb0">&#9644;</span> fuera del radio (0%)`;

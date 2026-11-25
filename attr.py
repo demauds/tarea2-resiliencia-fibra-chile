@@ -15,14 +15,19 @@ def unir(padre, a, b):
         padre[ra] = rb
 
 
-def contar_pares(padre, nodos):
-    pares = list(combinations(range(len(nodos)), 2))
-    conectados = 0
-    for i, j in pares:
+def pares_conectados(padre, nodos):
+    pares = []
+    for i, j in combinations(range(len(nodos)), 2):
         if nodos[i] is not None and nodos[j] is not None:
             if encontrar(padre, nodos[i]) == encontrar(padre, nodos[j]):
-                conectados += 1
-    return conectados / len(pares), conectados, len(pares)
+                pares.append((i, j))
+    return pares
+
+
+def contar_pares(padre, nodos):
+    total = len(nodos) * (len(nodos) - 1) // 2
+    pares = pares_conectados(padre, nodos)
+    return len(pares) / total, len(pares), total, pares
 
 
 def attr_operacion(enlaces, nodos):
@@ -43,12 +48,23 @@ def attr_terremoto(enlaces_prob, nodos, simulaciones=10000, semilla=2010):
         else:
             expuestos.append((s, t, p))
 
-    total = 0.0
+    suma = 0.0
+    suma_cuad = 0.0
+    veces = {}
     for _ in range(simulaciones):
         padre = padre_base.copy()
         for s, t, p in expuestos:
             if rng.random() >= p:
                 unir(padre, s, t)
-        total += contar_pares(padre, nodos)[0]
+        valor, _, _, pares = contar_pares(padre, nodos)
+        suma += valor
+        suma_cuad += valor * valor
+        for par in pares:
+            veces[par] = veces.get(par, 0) + 1
 
-    return total / simulaciones
+    media = suma / simulaciones
+    # error estándar de la media: s / raíz(N)
+    varianza = max(0.0, (suma_cuad - simulaciones * media * media) / (simulaciones - 1))
+    error = (varianza / simulaciones) ** 0.5
+    prob_par = {par: v / simulaciones for par, v in veces.items()}
+    return media, error, prob_par

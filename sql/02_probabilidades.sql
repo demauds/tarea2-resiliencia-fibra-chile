@@ -12,3 +12,9 @@ FROM enlaces e
 CROSS JOIN (SELECT geom FROM sismo WHERE mag = 8.8 LIMIT 1) s;
 
 ALTER TABLE probabilidad_falla ADD PRIMARY KEY (gid);
+
+-- Se actualiza la columna prob_falla de enlaces (los que quedan fuera del radio siguen en 0)
+UPDATE enlaces e
+   SET prob_falla = p.prob_falla
+  FROM probabilidad_falla p
+ WHERE e.gid = p.gid;

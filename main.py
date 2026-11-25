@@ -58,6 +58,20 @@ def crear_topologia(cur):
     cur.execute((SQL / "01_topologia.sql").read_text(encoding="utf-8"))
 
 
+def revisar_conectividad(cur):
+    cur.execute("""
+        SELECT count(*), count(*) FILTER (WHERE n = 2), max(n)
+          FROM (
+              SELECT component, count(*) AS n
+                FROM pgr_connectedComponents(
+                    'SELECT gid AS id, source, target, 1 AS cost, 1 AS reverse_cost FROM enlaces'
+                )
+               GROUP BY component
+          ) c
+    """)
+    return cur.fetchone()
+
+
 def cargar_nodos(cur):
     cur.execute("""
         DROP TABLE IF EXISTS nodos_clave;
@@ -122,30 +136,84 @@ def calcular_probabilidades(cur):
     cur.execute((SQL / "02_probabilidades.sql").read_text(encoding="utf-8"))
 
 
+def texto_sql(valor):
+    if valor is None:
+        return "NULL"
+    return "'" + str(valor).replace("'", "''") + "'"
+
+
 def escribir_main_sql(cur):
     cur.execute("""
-        SELECT gid, source, target, dist_epicentro_km, prob_falla
-          FROM probabilidad_falla
-         ORDER BY gid
+        SELECT e.gid, e.id_yafun, e.source, e.target, e.largo_km,
+               p.dist_epicentro_km, e.prob_falla, ST_AsText(e.geom)
+          FROM enlaces e
+          JOIN probabilidad_falla p USING (gid)
+         ORDER BY e.gid
     """)
     filas = cur.fetchall()
     lineas = [
-        "-- Probabilidad de falla de cada enlace de fibra (terremoto 8.8, 27/02/2010)",
-        "-- Modelo: p = max(0, 1 - d/250 km), d = distancia mínima epicentro-enlace",
-        "DROP TABLE IF EXISTS probabilidad_falla;",
-        "CREATE TABLE probabilidad_falla (",
+        "-- Infraestructura de fibra óptica (Yafún) con la probabilidad de falla de cada enlace",
+        "-- Terremoto 8.8 del 27/02/2010, modelo p = max(0, 1 - d/250 km),",
+        "-- d = distancia mínima epicentro-enlace. source y target vienen de pgr_createTopology.",
+        "CREATE EXTENSION IF NOT EXISTS postgis;",
+        "DROP TABLE IF EXISTS enlaces;",
+        "CREATE TABLE enlaces (",
         "    gid integer PRIMARY KEY,",
+        "    id_yafun varchar(254),",
         "    source integer,",
         "    target integer,",
+        "    largo_km double precision,",
         "    dist_epicentro_km double precision,",
-        "    prob_falla double precision",
+        "    prob_falla double precision NOT NULL DEFAULT 0,",
+        "    geom geometry(LineString, 4326)",
         ");",
-        "INSERT INTO probabilidad_falla (gid, source, target, dist_epicentro_km, prob_falla) VALUES",
+        "INSERT INTO enlaces (gid, id_yafun, source, target, largo_km, dist_epicentro_km, prob_falla, geom) VALUES",
     ]
-    valores = [f"({g}, {s}, {t}, {d:.3f}, {p:.6f})" for g, s, t, d, p in filas]
+    valores = [
+        f"({g}, {texto_sql(i)}, {s}, {t}, {l:.3f}, {d:.3f}, {p:.6f}, ST_GeomFromText('{w}', 4326))"
+        for g, i, s, t, l, d, p, w in filas
+    ]
     lineas.append(",\n".join(valores) + ";")
+    lineas.append("CREATE INDEX enlaces_geom_idx ON enlaces USING gist (geom);")
     (BASE / "main.sql").write_text("\n".join(lineas) + "\n", encoding="utf-8")
     return len(filas)
+
+
+def mostrar_sismo(cur):
+    cur.execute("""
+        SELECT id, mag, lugar, fecha AT TIME ZONE 'America/Santiago',
+               profundidad_km, round(ST_Y(geom)::numeric, 3), round(ST_X(geom)::numeric, 3)
+          FROM sismo
+    """)
+    print("   Tabla sismo:")
+    print("   id | mag | lugar | fecha (hora Chile) | profundidad km | lat | lon")
+    for fila in cur.fetchall():
+        print("   " + " | ".join(str(x) for x in fila))
+
+
+def mostrar_enlaces_afectados(cur, n=5):
+    cur.execute("""
+        SELECT count(*) FILTER (WHERE prob_falla > 0),
+               count(*) FILTER (WHERE prob_falla = 0),
+               avg(prob_falla) FILTER (WHERE prob_falla > 0)
+          FROM enlaces
+    """)
+    afectados, sin_falla, promedio = cur.fetchone()
+    print(f"   {afectados} enlaces con p > 0 (promedio {promedio:.3f}), {sin_falla} con p = 0")
+    for titulo, orden in (("más afectados", "DESC"), ("menos afectados con p > 0", "ASC")):
+        cur.execute(f"""
+            SELECT e.gid, e.source, e.target, round(e.largo_km::numeric, 2),
+                   round(p.dist_epicentro_km::numeric, 1), round(e.prob_falla::numeric, 6)
+              FROM enlaces e
+              JOIN probabilidad_falla p USING (gid)
+             WHERE e.prob_falla > 0
+             ORDER BY e.prob_falla {orden}, e.gid
+             LIMIT {n}
+        """)
+        print(f"   Enlaces {titulo}:")
+        print("   gid | source | target | largo km | dist. epicentro km | prob. falla")
+        for fila in cur.fetchall():
+            print("   " + " | ".join(str(x) for x in fila))
 
 
 def leer_nodos(cur):
@@ -212,7 +280,7 @@ def generar_mapa(cur, nodos, antes, despues):
             "antes": antes[0],
             "pares": antes[2],
             "conectados": antes[1],
-            "despues": despues,
+            "despues": despues[0],
         },
     }
     html = (BASE / "mapa_plantilla.html").read_text(encoding="utf-8")
@@ -237,18 +305,30 @@ def main():
         cur.execute("SELECT count(*) FROM enlaces_vertices_pgr")
         n_ver = cur.fetchone()[0]
         print(f"   {n_enl} enlaces, {n_ver} vértices (pgr_createTopology)")
+        comp, aisladas, mayor = revisar_conectividad(cur)
+        print(f"   {comp} componentes conexas, {aisladas} de solo dos vértices, "
+              f"la mayor con {mayor} vértices")
         print("3) Cargando nodos clave y sismo 8.8 ...")
         cargar_nodos(cur)
         cargar_sismo(cur)
+        mostrar_sismo(cur)
         print("4) Calculando probabilidades de falla ...")
         calcular_probabilidades(cur)
+        mostrar_enlaces_afectados(cur)
         n = escribir_main_sql(cur)
-        print(f"   main.sql generado con {n} enlaces")
+        print(f"   main.sql generado con {n} enlaces (geometría y probabilidad de falla)")
         nodos = leer_nodos(cur)
         print("5) Calculando ATTR ...")
         antes, despues = calcular_attr(cur, nodos)
+        attr_post, error, prob_par = despues
         print(f"   ATTR en operación : {antes[0]:.4f} ({antes[1]} de {antes[2]} pares conectados)")
-        print(f"   ATTR post 8.8     : {despues:.4f} (esperado, {SIMULACIONES} simulaciones)")
+        print(f"   ATTR post 8.8     : {attr_post:.4f} (esperado, {SIMULACIONES} simulaciones, "
+              f"error estándar {error:.6f})")
+        dif = attr_post - antes[0]
+        print(f"   Diferencia        : {dif:.4f} ({dif / antes[0] * 100:.1f} %)")
+        print("   Pares conectados antes del sismo y probabilidad de seguir conectados:")
+        for i, j in antes[3]:
+            print(f"     {nodos[i][0]} - {nodos[j][0]}: {prob_par.get((i, j), 0.0):.4f}")
         mapa = generar_mapa(cur, nodos, antes, despues)
         print(f"6) Mapa: {mapa}")
     if not args.sin_navegador:
